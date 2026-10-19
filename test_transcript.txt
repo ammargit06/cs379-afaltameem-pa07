@@ -1,0 +1,37 @@
+Testing swap(x, y) under all three binding modes (x=1, y=2 beforehand)...
+
+  [PASS] value mode: caller's x, y are UNCHANGED after the call (1, 2)
+  [PASS] reference mode: caller's x, y ARE swapped (2, 1)
+  [PASS] value-result mode: caller's x, y ARE swapped (2, 1), written back at return
+
+Testing the swap(x, x) aliasing case...
+
+  [PASS] reference mode: swap(x, x) leaves x correctly unchanged (5)
+  [PASS] value-result mode: swap(x, x) leaves x correctly unchanged (5)
+
+Testing asymmetric P(a, a) aliasing...
+
+  [PASS] reference P(a,a): shared slot ends at 12
+  [PASS] value-result P(a,a): left-to-right copy-back ends at 11
+
+Testing Cell identity and return-time visibility...
+
+  [PASS] value mode allocates a separate Cell
+  [PASS] value-mode assignment leaves caller at 10
+  [PASS] reference mode shares the caller Cell
+  [PASS] reference write is visible before return
+  [PASS] value-result starts with a private Cell
+  [PASS] value-result write is hidden before return
+  [PASS] value-result write appears at return
+
+Testing closures capture the DEFINING environment, not a value snapshot...
+
+  [PASS] all three closures return the CURRENT (final) value of i, not a snapshot
+
+Testing closures resolve free variables through defining_env, not caller_env...
+
+  [PASS] Closure.call resolves free variables via defining_env, ignoring caller_env entirely
+  [PASS] closure binds a call argument beside the captured environment
+  [PASS] a later closure call gets its own parameter value
+
+PARAMETER_BINDING_VERIFIED

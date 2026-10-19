@@ -1,6 +1,5 @@
 """
-PA 5 dependency: paste in YOUR OWN completed PA 3 parser.py here
-(needed transitively -- symtable.py imports from this file).
+PA 3: The USILang Parser -- starter.
 
 Complete the parsing functions below. AST node types are already
 defined -- do not modify them. See the assignment,
@@ -79,40 +78,93 @@ class _ParserState:
 
 
 def parse_factor(state: _ParserState):
-    # TODO
-    raise NotImplementedError
+    """<factor> ::= NUMBER | IDENT | '(' <expr> ')'"""
+    tok = state.peek()
+
+    if tok.type == "NUMBER":
+        state.advance()
+        return Number(int(tok.lexeme), tok.line)
+
+    if tok.type == "IDENT":
+        state.advance()
+        return Variable(tok.lexeme, tok.line)
+
+    if tok.type == "LPAREN":
+        state.advance()
+        node = parse_expr(state)
+        state.expect("RPAREN")
+        return node
+
+    raise ParseError(
+        f"Line {tok.line}: expected NUMBER, IDENT, or LPAREN, found {tok.type} ({tok.lexeme!r})."
+    )
 
 
 def parse_term(state: _ParserState):
-    # TODO
-    raise NotImplementedError
+    """<term> ::= <factor> { ('*' | '/') <factor> } -- left-associative."""
+    node = parse_factor(state)
+    while state.peek().type in ("STAR", "SLASH"):
+        op_tok = state.advance()
+        right = parse_factor(state)
+        node = BinOp(op_tok.lexeme, node, right, op_tok.line)
+    return node
 
 
 def parse_expr(state: _ParserState):
-    # TODO
-    raise NotImplementedError
+    """<expr> ::= <term> { ('+' | '-') <term> } -- left-associative."""
+    node = parse_term(state)
+    while state.peek().type in ("PLUS", "MINUS"):
+        op_tok = state.advance()
+        right = parse_term(state)
+        node = BinOp(op_tok.lexeme, node, right, op_tok.line)
+    return node
 
 
 def parse_declaration(state: _ParserState) -> Declaration:
-    # TODO
-    raise NotImplementedError
+    """<declaration> ::= 'let' IDENT '=' <expr> ';'"""
+    let_tok = state.expect("LET")
+    name_tok = state.expect("IDENT")
+    state.expect("ASSIGN")
+    expr = parse_expr(state)
+    state.expect("SEMI")
+    return Declaration(name_tok.lexeme, expr, let_tok.line)
 
 
 def parse_assignment(state: _ParserState) -> Assignment:
-    # TODO
-    raise NotImplementedError
+    """<assignment> ::= IDENT '=' <expr> ';'"""
+    name_tok = state.expect("IDENT")
+    state.expect("ASSIGN")
+    expr = parse_expr(state)
+    state.expect("SEMI")
+    return Assignment(name_tok.lexeme, expr, name_tok.line)
 
 
 def parse_statement(state: _ParserState):
-    # TODO: peek at state.peek().type to choose declaration vs. assignment
-    raise NotImplementedError
+    """<statement> ::= <declaration> | <assignment>
+
+    One token of lookahead: peek (never consume) to decide which
+    branch owns this statement.
+    """
+    tok = state.peek()
+    if tok.type == "LET":
+        return parse_declaration(state)
+    if tok.type == "IDENT":
+        return parse_assignment(state)
+    raise ParseError(
+        f"Line {tok.line}: expected LET or IDENT to start a statement, found {tok.type} ({tok.lexeme!r})."
+    )
 
 
 def parse_program(state: _ParserState) -> Program:
-    # TODO: loop parse_statement() until EOF
-    raise NotImplementedError
+    """<program> ::= { <statement> }"""
+    statements = []
+    while state.peek().type != "EOF":
+        statements.append(parse_statement(state))
+    return Program(statements)
 
 
 def parse(tokens: List[Token]) -> Program:
     state = _ParserState(tokens)
-    return parse_program(state)
+    program = parse_program(state)
+    state.expect("EOF")
+    return program

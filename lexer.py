@@ -1,17 +1,10 @@
 """
-PA 5 dependency: paste in YOUR OWN completed PA 2 lexer.py here.
-(Needed transitively -- symtable.py imports from parser.py, which
-imports from this file. PA 5's own new work doesn't touch lexing or
-parsing directly.)
+PA 2: The USILang Lexer.
 
-This is the same file from PA 2's repo -- copy your own working
-tokenize() implementation over this stub before starting parser.py.
-Every PA repo is independent (no shared filesystem across repos), so
-each pipeline stage bundles its own copy of the prior stages.
-
-Complete tokenize() below. See the assignment, Part B,
-for the full requirements. Must use a single compiled master regex
-with named groups -- not a hand-rolled character-by-character loop.
+tokenize() turns raw USILang source text into a flat, ordered list of
+Token objects for PA 3's recursive-descent parser. It uses a single
+compiled master regex with named groups and a position index -- not a
+hand-rolled character-by-character state machine.
 """
 
 import re
@@ -30,8 +23,39 @@ class LexError(Exception):
     pass
 
 
-# TODO: build your master regex here, e.g.:
-# _MASTER_RE = re.compile(r"(?P<NUMBER>\d+)|(?P<IDENT>[A-Za-z_]\w*)|...")
+# Reserved words: lexemes that match the IDENT pattern but must be
+# relabeled after the fact. We never give `let` its own regex
+# alternative ahead of IDENT -- that would be maximal-munch-fragile
+# (see Part A). Instead IDENT matches wide, then we downgrade here.
+KEYWORDS = {
+    "let": "LET",
+}
+
+
+# One ordered list of (group name, sub-pattern). Order only matters
+# where two alternatives could match at the same position; here every
+# real token has a disjoint first character, so the only ordering that
+# matters is keeping MISMATCH last as the catch-all trap state.
+_TOKEN_SPEC = [
+    ("NUMBER",   r"[0-9]+"),                    # USILang NUMBER = unsigned integer
+    ("IDENT",    r"[A-Za-z_][A-Za-z0-9_]*"),    # matched wide, then keyword-checked
+    ("PLUS",     r"\+"),
+    ("MINUS",    r"-"),
+    ("STAR",     r"\*"),
+    ("SLASH",    r"/"),
+    ("LPAREN",   r"\("),
+    ("RPAREN",   r"\)"),
+    ("ASSIGN",   r"="),
+    ("SEMI",     r";"),
+    ("COMMENT",  r"#[^\n]*"),                   # '#' to end of line, newline not consumed
+    ("NEWLINE",  r"\n"),                        # consumed, never emitted; bumps line count
+    ("SKIP",     r"[ \t\r]+"),                  # consumed, never emitted
+    ("MISMATCH", r"."),                         # any other single char -> LexError
+]
+
+_MASTER_RE = re.compile(
+    "|".join(f"(?P<{name}>{pattern})" for name, pattern in _TOKEN_SPEC)
+)
 
 
 def tokenize(source: str) -> List[Token]:
@@ -43,5 +67,39 @@ def tokenize(source: str) -> List[Token]:
     them. Track 1-indexed line numbers. Raise LexError (with the
     offending character and line) on unrecognized input.
     """
-    # TODO
-    raise NotImplementedError
+    tokens: List[Token] = []
+    line = 1
+    pos = 0
+    end = len(source)
+
+    while pos < end:
+        m = _MASTER_RE.match(source, pos)
+        # m can never be None: the MISMATCH group matches any single
+        # character that nothing else claimed, and NEWLINE covers '\n'.
+        kind = m.lastgroup
+        lexeme = m.group()
+        pos = m.end()
+
+        if kind == "NEWLINE":
+            line += 1
+        elif kind == "SKIP" or kind == "COMMENT":
+            continue
+        elif kind == "MISMATCH":
+            raise LexError(
+                f"Unexpected character {lexeme!r} at line {line}"
+            )
+        elif kind == "IDENT" and lexeme in KEYWORDS:
+            tokens.append(Token(KEYWORDS[lexeme], lexeme, line))
+        else:
+            tokens.append(Token(kind, lexeme, line))
+
+    tokens.append(Token("EOF", "", line))
+    return tokens
+
+
+if __name__ == "__main__":
+    import sys
+
+    src = sys.stdin.read() if len(sys.argv) < 2 else sys.argv[1]
+    for tok in tokenize(src):
+        print(tok)
